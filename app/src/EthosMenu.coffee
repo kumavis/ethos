@@ -4,6 +4,7 @@ web3 = require 'web3'
 
 module.exports = class EthosMenu
 	openWindow: (name, width, height) ->
+		self = this
 		if !@[name]
 			title = name
 			title[0] = title[0].toUpperCase()
@@ -21,13 +22,15 @@ module.exports = class EthosMenu
 				min_width: 400
 				min_height: 200
 			
-			@[name] = @gui.Window.open( "app://ethos/app/#{name}.html", newWindowOptions )
+			win = @gui.Window.open( "app://ethos/app/#{name}.html", newWindowOptions )
 			
-			self = this
-			@[name].on 'close', ->
+			win.on 'loaded', ->
+				win.window.config = self.config
+				win.window.init()
+			win.on 'close', ->
 				this.close( true )
 				self[name] = null
-
+			@[name] = win
 			setTimeout( ( => self[name].focus() ), 500 )
 		else
 			@[name].focus()
@@ -38,6 +41,7 @@ module.exports = class EthosMenu
 
 	constructor: ({@gui, @ethProcess, @ipfsProcess, @config})->
 		gui = @gui
+		@win = window
 		EthereumMenu = require( './EthereumMenu.coffee')(gui)
 		DAppsMenu = require( './DAppsMenu.coffee')(gui)
 		IPFSMenu = require('./IPFSMenu.coffee')(gui)
@@ -50,6 +54,7 @@ module.exports = class EthosMenu
 		@ipfs = @ipfsMenu.get()
 		@eth = @ethMenu.get()
 		@dapps = @dappsMenu.get()
+		@dappItems = []
 
 		@tray = new gui.Tray
 			title: ''
@@ -88,20 +93,20 @@ module.exports = class EthosMenu
 				gui.Window.get().showDevTools()
 				setTimeout( (=> gui.Window.get().showDevTools()), 300 )
 
-		@dappsMenu.on 'dapp', ({name, dappwin}) =>
-			index = @menu.items.indexOf( @dapps )
-			dappItem = new gui.MenuItem
-				label: name
-				click: => dappwin.show()
-			@menu.insert( dappItem, index + 1 )
-			dappwin.on 'close', ->
-				console.log "DAPP window closing"
-				dappItem.remove()
-				dappwin.close(true)
+		root = this
 
-			dappwin.on 'closed', ->
-				console.log "DAPP window closed"
-				dappItem.remove()
+		@dappsMenu.on 'dapp', =>
+			root.menu.remove( item ) for item in root.dappItems	
+			root.dappItems = []
+			index = root.menu.items.indexOf( root.dapps )
+			for dapp in root.dappsMenu.dappWindows
+				dappItem = new gui.MenuItem
+					label: dapp.name
+					click: => dapp.win.show()
+				root.dappItems.push( dappItem )
+				index++
+				root.menu.insert( dappItem, index )
+			
 
 		@menu.append( about )
 		@menu.append( settings )

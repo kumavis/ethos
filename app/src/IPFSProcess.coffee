@@ -7,19 +7,24 @@ Backbone = require 'backbone'
 ipfsApi = require 'ipfs-api'
 
 
-
 module.exports = class IPFSProcess extends Backbone.Model
 	constructor: ({@os, ext, @config, @gui}) ->
 		@process = null
 		@path = path.join( process.cwd(), "./bin/#{ @os }/ipfs/ipfs#{ ext }")
 		@api = new ipfsApi('localhost', 5001)
 		fs.chmodSync( @path, '755') if @os is 'darwin'
+		@connected = false
 		@on 'status', (running) =>
 			if running
 				@api.config.show (err, ipfsConfig) =>
-					@ipfsConfig = ipfsConfig
-					@trigger( 'connected' ) unless err
-					console.log( "IPFS config: ", err, ipfsConfig)
+					@api.swarm.peers (err, peers) =>
+						if err
+							@connected = false
+						else
+							@connected = true
+							@ipfsConfig = ipfsConfig
+							@trigger( 'connected' )
+							console.log( "IPFS config: ", err, ipfsConfig)
 
 	start: ->
 		console.log( @path )

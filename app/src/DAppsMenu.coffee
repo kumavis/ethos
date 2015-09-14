@@ -5,6 +5,7 @@ path = require 'path'
 module.exports = (gui) ->
 	class DAppsMenu extends Backbone.Model
 		constructor: ({@eth, @ipfs, @config}) ->
+			@win = window
 			@menu = new gui.Menu()
 			@dappWindows = []
 			@rootItem = new gui.MenuItem
@@ -50,7 +51,7 @@ module.exports = (gui) ->
 					@menu.append @getLocalDAppMenu( dapp.name, dapp.path )
 
 		get: -> @rootItem
-		closeAll: -> w.close(true) for w in @dappWindows
+		closeAll: -> w.win.close(true) for w in @dappWindows
 
 		getIPFSDAppMenu: (name, hash) =>
 			menu = new gui.Menu()
@@ -63,9 +64,9 @@ module.exports = (gui) ->
 			remove = new gui.MenuItem
 				label: 'Remove'
 				click: =>
-					#if (window.confirm "Are you sure you want to delete the DApp: #{ name }")
-					@menu.remove( menuItem )
-					@removeIFPSDApp(name, hash )
+					if (window.confirm "Are you sure you want to delete the DApp: #{ name }")
+						@menu.remove( menuItem )
+						@removeIFPSDApp(name, hash )
 			menu.append( open )
 			menu.append( remove )
 			menuItem
@@ -102,7 +103,7 @@ module.exports = (gui) ->
 			@config.flags.localDApps.push({name,path})
 			@config.saveFlag( 'localDApps' )
 			@menu.append @getLocalDAppMenu( name, path )
-			@openDAppFromFolder(nmae, path)
+			@openDAppFromFolder(name, path)
 
 		removeLocalDApp: (name, path) ->
 			@config.flags.localDApps = _.without(@config.flags.localDApps, _.findWhere(@config.flags.localDApps, {name, path}))
@@ -111,7 +112,6 @@ module.exports = (gui) ->
 		getWindowOptions: (name)->
 			"inject-js-start": "app/js/web3.js"
 			"inject-js-end": "app/js/web3-provider-setup.js"
-			"new-instance": true
 			icon: "app/images/icon-tray.ico"
 			title: name
 			toolbar: @config.getBool( 'debug' )
@@ -126,21 +126,29 @@ module.exports = (gui) ->
 			min_height: 200
 
 		openDAppFromIPFSHash: (name, hash) ->
-			url = "http://#{ @ipfs.getGateway() }/ipfs/#{ hash }"
+			url = "http://#{ if @ipfs.connected then @ipfs.getGateway() else 'gateway.ipfs.io' }/ipfs/#{ hash }"
 			console.log "Opening DApp at #{url}", 
-			win = gui.Window.open( url, @getWindowOptions() )
-			@dappWindows.push( win)
-			@trigger('dapp', name: name, dappwin: win)
+			win = gui.Window.open( url, @getWindowOptions(name) )
+			@handleOpenDApp( {name,url} )
 
-		openDAppFromFolder: (name, path) ->
+		openDAppFromFolder: (name, url) ->
 			console.log "Opening DApp at #{ path }"
-			win = gui.Window.open( path, @getWindowOptions() )
-			@dappWindows.push( win )
-			@trigger('dapp', name: name, dappwin: win)
+			win = gui.Window.open( url, @getWindowOptions(name) )
+			@handleOpenDApp( {name,url} )
 
 		openDApp: (name, path) ->
 			console.log "Opening #{name} DApp"
-			win = gui.Window.open( "app://ethos/ipfs/#{path}/index.html", @getWindowOptions(name) )
-			@dappWindows.push( win )
-			@trigger('dapp', name:name, dappwin: win)			
+			url = "app://ethos/ipfs/#{path}/index.html"
+			@handleOpenDApp( {name,url} )
+
+		handleOpenDApp: ({name,url}) ->
+			self = this
+			win = gui.Window.open( url, @getWindowOptions(name) )
+			win.on 'close', ->
+				self.dappWindows = _.without(self.dappWindows, _.findWhere(self.dappWindows, {name, win}))
+				self.win.console.log "DAPP WINDOW CLOSE EVENT"
+				self.trigger('dapp')
+				this.close(true)
+			@dappWindows.push( {name,win} )
+			@trigger('dapp')		
 
