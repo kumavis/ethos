@@ -4,7 +4,7 @@ path = require 'path'
 module.exports = (gui) ->
 
 	class Account
-		constructor: (@address, @process, @config) ->
+		constructor: (@address, @process, @config, @dialogManager) ->
 			@web3 = @process.web3
 			@submenu = new gui.Menu()
 			@balanceItem = new gui.MenuItem
@@ -39,6 +39,7 @@ module.exports = (gui) ->
 			@createImportItem()
 			@createAccountsItem()
 			@createMiningItem()
+			@createConsoleItem()
 			@process.on( 'connected', @update )
 			@config.on( 'updated', @update )
 			@update()
@@ -72,18 +73,12 @@ module.exports = (gui) ->
 			@menu.append( @newAccount )
 
 		createImportItem: ->
+			self = this
 			@import = new gui.MenuItem
 				label: 'Import Wallet'
 				enabled: !@config.getBool('ethRemoteNode')
-				click: =>
-					chooser = window.document.querySelector('#addFile')
-					chooser.addEventListener "change", (ev) =>
-						filePath = ev.target.value
-						@process.importWallet filePath, (err) ->
-							window.alert( "Wallet imported successfully") unless err
-						gui.Window.get().hide()
-					gui.Window.get().show()
-					chooser.click()
+				click: => @process.importWallet()
+					
 			@menu.append( @import )
 
 		createMiningItem: ->
@@ -102,6 +97,11 @@ module.exports = (gui) ->
 				submenu: new gui.Menu()
 			@menu.append( @accounts )
 
+		createConsoleItem: =>
+			@console = new gui.MenuItem
+				label: "Console"
+				click: => @process.console()
+			@menu.append( @console )
 
 		updateMining: =>
 			@web3.eth.getMining (err, mining) =>
@@ -143,6 +143,7 @@ module.exports = (gui) ->
 						@newAccount.enabled = false
 						@import.enabled = false
 						@mining.enabled = false
+						@console.enabled = false
 					else
 						toggle = if remote then 'Disconnect' else 'Stop'
 						@status.label = "Status: #{status} ##{block}"
@@ -150,6 +151,7 @@ module.exports = (gui) ->
 						@newAccount.enabled = !remote
 						@import.enabled = !remote
 						@mining.enabled = !remote
+						@console.enabled = !remote
 					@updateAccounts()
 					@updateMining()
 

@@ -3,8 +3,10 @@ Backbone = require 'backbone'
 path = require 'path'
 
 module.exports = (gui) ->
+	root = this
 	class DAppsMenu extends Backbone.Model
-		constructor: ({@eth, @ipfs, @config}) ->
+		constructor: ({@eth, @ipfs, @config, @dialogManager}) ->
+			self = this
 			@win = window
 			@menu = new gui.Menu()
 			@dappWindows = []
@@ -17,22 +19,41 @@ module.exports = (gui) ->
 			@newDappMenu.append new gui.MenuItem
 				label: 'From IPFS hash'
 				click: =>
-					ipfsHash = window.prompt("Please enter the IPFS content hash of the \u00D0App to add.")
-					name = window.prompt("What name would you like to save that dapp as?")
-					return unless ipfsHash and name
-					@addIPFSDApp( name, ipfsHash )
+					@dialogManager.newDialog
+						title: 'Ethos: Add \u00D0App'
+						body: "Please provide the IPFS content hash and a name for this \u00D0App."
+						form: """
+							<input type="text" placeholder="Name" name="name">
+							<input type="text" placeholder="IPFS Hash" name="hash">
+							<div class="center">
+								<input type="submit" name="add" value="Cancel">
+								<input type="submit" name="add" value="Add">
+							</div>
+						"""
+						callback: (result) ->
+							return if result.add is 'Cancel'
+							return unless result.hash and result.name
+							self.addIPFSDApp( result.name, result.hash )
 
 
 			@newDappMenu.append new gui.MenuItem
 				label: 'Local File'
 				click: =>
-					chooser = window.document.querySelector('#addFile')
-					chooser.addEventListener "change", (evt) =>
-						filePath = evt.target.value
-						gui.Window.get().hide()
-						name = window.prompt("What name would you like to save that dapp as?")
-						@addLocalDApp( name, filePath ) if name and filePath
-					chooser.click()
+					@dialogManager.newDialog
+						title: 'Ethos: Add \u00D0App'
+						body: "Select the <em>index.html</em> file for your local \u00D0App and a name."
+						form: """
+							<input type="text" placeholder="Name" name="name"> <input type="file" name="file">
+							<div class="center">
+								<input type="submit" name="add" value="Cancel">
+								<input type="submit" name="add" value="Add">
+							</div>
+						"""
+						callback: (result) ->
+							return if result.add is 'Cancel'
+							return unless result.file and result.name
+							self.addLocalDApp( result.name, result.file )
+					
 
 			@menu.append new gui.MenuItem
 				label: 'Add \u00D0App'
@@ -41,6 +62,10 @@ module.exports = (gui) ->
 			@menu.append new gui.MenuItem
 				label: 'Basic Wallet'
 				click: => @openDApp('Basic Wallet', 'wallet')
+
+			@menu.append new gui.MenuItem
+				label: 'DApp List'
+				click: => @openDApp('\u00D0App List', 'dapplist')
 
 			for dapp in @config.get('ipfsDApps')
 				do (dapp) =>
@@ -54,6 +79,7 @@ module.exports = (gui) ->
 		closeAll: -> w.win.close(true) for w in @dappWindows
 
 		getIPFSDAppMenu: (name, hash) =>
+			self = this
 			menu = new gui.Menu()
 			menuItem = new gui.MenuItem
 				label: name
@@ -64,14 +90,25 @@ module.exports = (gui) ->
 			remove = new gui.MenuItem
 				label: 'Remove'
 				click: =>
-					if (window.confirm "Are you sure you want to delete the DApp: #{ name }")
-						@menu.remove( menuItem )
-						@removeIFPSDApp(name, hash )
+					@dialogManager.newDialog
+						title: 'Ethos: Remove \u00D0App'
+						body: "Are you sure you want to remove the IPFS \u00D0App: <strong>#{ name }</strong> from Ethos? "
+						form: """
+							<div class="center">
+								<input type="submit" name="remove" value="Cancel">
+								<input type="submit" name="remove" value="Yes">
+							</div>
+						"""
+						callback: (result) ->
+							return if result.remove is 'Cancel'
+							self.menu.remove( menuItem )
+							self.removeIFPSDApp(name, hash )
 			menu.append( open )
 			menu.append( remove )
 			menuItem
 
 		getLocalDAppMenu: (name, path) =>
+			self = this
 			menu = new gui.Menu()
 			menuItem = new gui.MenuItem
 				label: name
@@ -82,9 +119,19 @@ module.exports = (gui) ->
 			remove = new gui.MenuItem
 				label: 'Remove'
 				click: =>
-					#if (window.confirm "Are you sure you want to delete the DApp: #{ name }")
-					@menu.remove( menuItem )
-					@removeLocalDApp(name, path )
+					@dialogManager.newDialog
+						title: 'Ethos: Remove \u00D0App'
+						body: "Are you sure you want to remove the local \u00D0App: <strong>#{ name }</strong> from Ethos?"
+						form: """
+							<div class="center">
+								<input type="submit" name="remove" value="Cancel">
+								<input type="submit" name="remove" value="Yes">
+							</div>
+						"""
+						callback: (result) ->
+							return if result.remove is 'Cancel'
+							self.menu.remove( menuItem )
+							self.removeLocalDApp(name, path )
 			menu.append( open )
 			menu.append( remove )
 			menuItem
@@ -126,29 +173,17 @@ module.exports = (gui) ->
 			min_height: 200
 
 		openDAppFromIPFSHash: (name, hash) ->
-			url = "http://#{ if @ipfs.connected then @ipfs.getGateway() else 'gateway.ipfs.io' }/ipfs/#{ hash }"
-			console.log "Opening DApp at #{url}", 
-			win = gui.Window.open( url, @getWindowOptions(name) )
-			@handleOpenDApp( {name,url} )
+			gui.Shell.openExternal "http://#{ if @ipfs.connected then @ipfs.getGateway() else 'gateway.ipfs.io' }/ipfs/#{ hash }"
 
 		openDAppFromFolder: (name, url) ->
-			console.log "Opening DApp at #{ path }"
-			win = gui.Window.open( url, @getWindowOptions(name) )
-			@handleOpenDApp( {name,url} )
+			gui.Shell.openExternal( "http://localhost:8080/dapp/#{name}" )
 
 		openDApp: (name, path) ->
-			console.log "Opening #{name} DApp"
-			url = "app://ethos/ipfs/#{path}/index.html"
-			@handleOpenDApp( {name,url} )
+			@handleOpenDApp
+				name: name
+				url: "app://ethos/app/#{path}/index.html"
 
 		handleOpenDApp: ({name,url}) ->
-			self = this
-			win = gui.Window.open( url, @getWindowOptions(name) )
-			win.on 'close', ->
-				self.dappWindows = _.without(self.dappWindows, _.findWhere(self.dappWindows, {name, win}))
-				self.win.console.log "DAPP WINDOW CLOSE EVENT"
-				self.trigger('dapp')
-				this.close(true)
-			@dappWindows.push( {name,win} )
-			@trigger('dapp')		
+			console.log "Opening DApp at #{ url }"
+			gui.Window.open( url, @getWindowOptions(name) )
 

@@ -1,6 +1,6 @@
 web3 = require 'web3'
 
-
+root = this
 
 module.exports = class EthosMenu
 	openWindow: (name, width, height) ->
@@ -39,7 +39,7 @@ module.exports = class EthosMenu
 	showAbout: ->
 		@openWindow( 'about', 986, 385 )
 
-	constructor: ({@gui, @ethProcess, @ipfsProcess, @config})->
+	constructor: ({@gui, @ethProcess, @ipfsProcess, @config, @dialogManager})->
 		gui = @gui
 		@win = window
 		EthereumMenu = require( './EthereumMenu.coffee')(gui)
@@ -47,9 +47,9 @@ module.exports = class EthosMenu
 		IPFSMenu = require('./IPFSMenu.coffee')(gui)
 
 		@menu = new gui.Menu()
-		@ipfsMenu = new IPFSMenu( process: @ipfsProcess, config: @config )
-		@ethMenu = new EthereumMenu( process: @ethProcess, config: @config )
-		@dappsMenu = new DAppsMenu( eth: @ethProcess, ipfs: @ipfsProcess, config: @config )
+		@ipfsMenu = new IPFSMenu( process: @ipfsProcess, config: @config, dialogManager: @dialogManager )
+		@ethMenu = new EthereumMenu( process: @ethProcess, config: @config, dialogManager: @dialogManager )
+		@dappsMenu = new DAppsMenu( eth: @ethProcess, ipfs: @ipfsProcess, config: @config, dialogManager: @dialogManager )
 
 		@ipfs = @ipfsMenu.get()
 		@eth = @ethMenu.get()
@@ -91,22 +91,7 @@ module.exports = class EthosMenu
 			label: 'Debug'
 			click: ->
 				gui.Window.get().showDevTools()
-				setTimeout( (=> gui.Window.get().showDevTools()), 300 )
-
-		root = this
-
-		@dappsMenu.on 'dapp', =>
-			root.menu.remove( item ) for item in root.dappItems	
-			root.dappItems = []
-			index = root.menu.items.indexOf( root.dapps )
-			for dapp in root.dappsMenu.dappWindows
-				dappItem = new gui.MenuItem
-					label: dapp.name
-					click: => dapp.win.show()
-				root.dappItems.push( dappItem )
-				index++
-				root.menu.insert( dappItem, index )
-			
+				setTimeout( (=> gui.Window.get().showDevTools()), 300 )		
 
 		@menu.append( about )
 		@menu.append( settings )

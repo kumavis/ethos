@@ -4,13 +4,12 @@ bodyParser = require 'body-parser'
 multer = require 'multer'
 server = express()
 
-
-
 contains = (arr, val) -> arr.indexOf( val ) >= 0
 
-module.exports = (web3, config) ->
+module.exports = (web3, config, dialogManager) ->
 
 	rpcDomainWhitelist = -> config.get('ethRpcProxyWhitelist')
+	rpcDomainBlacklist = -> config.get('ethRpcProxyBlacklist')
 
 	server.options '*', (request, response) ->
 		response.header('Access-Control-Allow-Origin', '*')
@@ -40,13 +39,31 @@ module.exports = (web3, config) ->
 				response.writeHead(res.statusCode, res.headers)
 
 			source = request.headers.referer or request.headers.origin
-			if !contains( rpcDomainWhitelist(), source )
-				if window.confirm("Would you like to allow Ethereum RPC calls from: #{source} in the future.")
-					config.flags['ethRpcProxyWhitelist'].push( source )
-					config.saveFlag( 'ethRpcProxyWhitelist' )
+			if !contains( rpcDomainWhitelist(), source ) and !contains( rpcDomainBlacklist(), source )
+				dialogManager.newDialog
+					title: "Ethos: Ethereum RPC Proxy"
+					body: " Would you like to allow Ethereum RPC calls from: <pre>#{source}</pre> in the future."
+					form: """
+						<div class="center">
+							<input type="submit" name="allow" value="Never">
+							<input type="submit" name="allow" value="Not now">
+							<input type="submit" name="allow" value="Yes">
+						</div>
+					"""
+					callback: (result) =>
+						if result.allow is 'Yes'
+							config.flags['ethRpcProxyWhitelist'].push( source )
+							config.saveFlag( 'ethRpcProxyWhitelist' )
 
-			proxy_request.write( data ) if contains( rpcDomainWhitelist(), source )
-			proxy_request.end()
+						if result.allow is 'Never'
+							config.flags['ethRpcProxyBlacklist'].push( source )
+							config.saveFlag( 'ethRpcProxyBlacklist' )
+
+						proxy_request.write( data ) if contains( rpcDomainWhitelist(), source )
+						proxy_request.end()
+			else
+				proxy_request.write( data ) if contains( rpcDomainWhitelist(), source )
+				proxy_request.end()
 
 	server.use( bodyParser.json() )
 	server.use( multer )

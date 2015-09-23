@@ -1,6 +1,6 @@
 module.exports = (gui) ->
 	class IPFSMenu
-		constructor: ({@process, @config}) ->
+		constructor: ({@process, @config, @dialogManager}) ->
 			@menu = new gui.Menu()
 			@rootItem = new gui.MenuItem
 				label: 'IPFS'
@@ -10,6 +10,18 @@ module.exports = (gui) ->
 			@process.on( 'status', @updateStatus )
 			@process.on( 'connected', @onConnected )
 
+
+		showHash: (err, hash) =>
+			if err
+				@dialogManager.newDialog
+					title: "Ethos: IPFS Error"
+					body: "<p>#{ err.message }</p>"
+					type: 'error'
+			else
+				@dialogManager.newDialog
+					title: "Ethos: IPFS"
+					body: "<p>Added to IPFS: <em>#{hash}</em></p>"
+
 		createItems: ->
 			@status = new gui.MenuItem
 				label: 'Status: Not Running'
@@ -18,6 +30,15 @@ module.exports = (gui) ->
 			@toggle = new gui.MenuItem
 				label: 'Start'
 				click: => @process.toggle()
+
+			@addFile = new gui.MenuItem
+				label: 'Add File'
+				click: => @process.addFile( @showHash )
+						
+
+			@addFolder = new gui.MenuItem
+				label: 'Add Folder'
+				click: => @process.addFolder( @showHash )
 
 			@files = new gui.MenuItem
 				label: 'Manage Files'
@@ -33,11 +54,16 @@ module.exports = (gui) ->
 			@menu.append( @toggle )
 			@menu.append( @info )
 			@menu.append( @files )
+			@menu.append( @addFile )
+			@menu.append( @addFolder )
+
 
 		updateStatus: (running) =>
 			@status.label = "Status: Connecting"
 			@toggle.label = "Stop"
 			@files.enabled = false
+			@addFile.enabled = false
+			@addFolder.enabled = false
 			@info.enabled = false
 			if !running
 				@status.label = "Status: Not Running"
@@ -46,14 +72,15 @@ module.exports = (gui) ->
 		onConnected: =>
 			@process.api.id (err, info) =>
 				unless err
-					console.log( "IPFS connected: ", err, info)
+					console.log( "IPFS connected: ", info)
 					@apiAddress = @process.getAPI() 
-					console.log( "IPFS API address: #{ @apiAddress }" )
-					@status.label = "Status: Connected" unless err
+					@status.label = "Status: Connected"
 					notification = new window.Notification "Ethos",
 						body: "IPFS Network Connected."
 					notification.onshow = -> setTimeout( ( -> notification.close() ), 3000)
 				@files.enabled = !err
 				@info.enabled = !err
+				@addFile.enabled = !err
+				@addFolder.enabled = !err
 
 		get: -> @rootItem
