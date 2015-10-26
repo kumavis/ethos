@@ -3,7 +3,7 @@
 
 An Ethereum Browser
 
-Still under development. Be waned that this project is still in an early alpha phase.
+Still under development. Be warned that this project is still in an early alpha phase.
 Binaries and Installers for Windows & OSX will be available under the **Releases** tab on GitHub.
 
 ##Features
